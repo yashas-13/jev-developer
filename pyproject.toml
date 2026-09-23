@@ -1,0 +1,21 @@
+[project]
+name = "jev-developer"
+version = "0.1.0"
+description = "JEV-Developer: offline-first AI CLI coding agent with typed tool calls and guardrails."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = ["httpx>=0.28,<1", "rich>=13,<14", "typer>=0.12,<1"]
+
+[project.scripts]
+jev-dev = "jev_developer.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 120
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
