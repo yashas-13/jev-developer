@@ -1,9 +1,24 @@
-# JEV-Developer ⚡
+# JEV-Developer ⚡ (v0.2.0 — production grade)
 
 Offline-first AI CLI coding agent with a **typed tool-call policy**: the model
 *chooses* (`READ/SEARCH/EDIT/RUN/DONE/BLOCKED`) instead of emitting arbitrary
 shell. Inspired by `jev-ultrafast` (one indexed choice per step, independent
 verification).
+
+## Production qualities (checklist)
+
+| Quality | How | Proof |
+|---|---|---|
+| Config | `.jev/config.yaml` + `JEV_*` env + CLI flags, validated | `test_prod.py` (3 tests) |
+| Logging | `JEV_LOG_LEVEL`, console + `.jev/logs/*.jsonl`, secret redaction | `test_logging_redacts_and_traces` |
+| Typed errors | `JevError(code, msg, hint)`, 8 codes | `test_errors_have_codes` |
+| Retries/timeouts | LLM 3 tries exp-backoff, 60s timeout; tool `run` timeout | `providers.py`, `test_provider_needs_key` |
+| Health check | `jev-dev doctor` (python/pytest/node/keys/config) | manual + test |
+| Versioning | `jev-dev version`, `__version__ 0.2.0` | test |
+| Tests | 29 offline, ~3s | `python -m pytest -v` |
+| Packaging | hatchling wheel, `dev` extras, `dist/` ignored | `pyproject.toml` |
+| Guardrails | jail + deny + allow-list + exact-once edits + 3-strikes blocked | `test_tools.py` (7) |
+| Docs | README + ARCHITECTURE + TEST_REPORT + PRODUCTION | `docs/` |
 
 ## Why different (vs generic LLM CLIs)
 
@@ -11,83 +26,70 @@ verification).
 |---|---|---|
 | Action space | Typed, observed files/commands only | Free-form shell |
 | Secret guard | Deny `.env/.ssh/gh hosts/keys` + workspace jail | Often none |
-| Command guard | Allow-list (`pytest/ruff/node --check/git status\|diff`) + deny destructive patterns | Direct exec |
-| Offline mode | Deterministic heuristic policy, zero API calls | Requires key |
-| Verification | `benchmark` + 21 pytest contracts | Ad-hoc |
-
-> Honest note: "bypass competitors" = architecture
-> (choice-not-generation + guardrails + offline tests), not benchmark proof.
-> Run `jev-dev benchmark` and extend `tests/`.
+| Command guard | Allow-list + deny destructive patterns | Direct exec |
+| Offline mode | Deterministic heuristic, zero API calls | Requires key |
+| Verification | `benchmark` + 29 pytest contracts | Ad-hoc |
+| Ops | config/logging/traces/doctor/version/retries | Varies |
 
 ## Install
 
 ```bash
 cd ~/jev-developer
-pip install -e .
+pip install -e ".[dev]"
 jev-dev --help
+jev-dev init --path ./myrepo   # starter .jev/config.yaml
+jev-dev doctor --path ./myrepo # health check
 ```
 
 ## Use
 
 ```bash
-jev-dev run "fix bug in server.py" --path ./myrepo
+jev-dev run "fix bug in server.py" --path ./myrepo [--max-steps 20]
 jev-dev ask "how do I run tests?"
 jev-dev benchmark
-jev-dev chat --path ./myrepo     # REPL: /run /read /search /files /test /clear /help /quit
-jev-dev tui --path ./myrepo      # full-screen: files sidebar + log, Tab switches pane, Enter sends
+jev-dev chat --path ./myrepo
+jev-dev tui --path ./myrepo
+jev-dev version
 ```
 
-LLM mode (optional): set `JEV_API_KEY` + `JEV_BASE_URL`
-(OpenRouter-compatible) + `JEV_MODEL`. Offline heuristic is the default.
-
-TUI uses stdlib `curses` only (Termux-safe, no extra deps); falls back to
-chat REPL if unavailable.
+Env: `JEV_MAX_STEPS`, `JEV_MODEL`, `JEV_BASE_URL`, `JEV_LOG_LEVEL`,
+`JEV_API_KEY` (optional LLM). File: `.jev/config.yaml` (see `jev-dev init`).
+Traces: `.jev/logs/<date>.jsonl` (secrets redacted).
 
 ## How it works (full explanation)
-
-**One loop, four stages:**
 
 ```text
 1. OBSERVE  collect_files() → sorted code/text files (caches skipped)
 2. CHOOSE   choose(goal, files, history) → one Decision(op, target, reason)
 3. ACT      guarded tool: read / search / edit / run
-4. VERIFY   log step → repeat (max 12) → done/budget/blocked/needs-human-edit
+4. VERIFY   log step → repeat (max_steps) → done/budget/blocked/needs-human-edit
 ```
 
-**Decision order** (`policy.py`): file named in goal → first unread file →
-search (once, if asked) → `pytest -q` (if asked, after reads) → EDIT proposal
-(if asked, after reads) → DONE. Targets are always observed, never invented.
-
-**Safety** (`tools.py`): paths jailed to workspace; secrets (`.env`, `.ssh`,
-gh hosts, keys, `.npmrc`) blocked case-insensitively; destructive commands
-denied then allow-list checked; edits need exact-once `old` match; invalid
-regex surfaced as error, loop never crashes (3 strikes → `blocked`); EDIT is
-human-gated (`needs-human-edit` + filename, no autonomous writes).
-
-**Interfaces** (`chat.py`/`tui.py`/`cli.py`): REPL with `/run /read /search
-/files /test /clear /help /quit`; curses TUI with sidebar + log + status bar;
-5 CLI commands (`run ask benchmark chat tui`). Details:
-`docs/ARCHITECTURE.md`.
+Decision order: named file → unread → SEARCH(once) → `pytest -q` → EDIT
+(human-gated) → DONE. Targets always observed. `DONE` is a claim — re-run
+tests. Details: `docs/ARCHITECTURE.md`.
 
 ## Tests & validation
 
 ```bash
-python -m pytest -v   # 21 passed (~1s), all offline
+python -m pytest -v   # 29 passed (~3s), all offline
 jev-dev benchmark     # 3 smoke checks → pass
 ```
 
-Coverage: policy 9 + tools 7 + loop/chat/cli 5. Full map + latest run +
-manual checklist: `docs/TEST_REPORT.md`. `DONE` is a claim, not proof —
-re-run tests after every change.
+Coverage: policy 9 + tools 7 + loop/chat/cli 5 + prod 8. Full map:
+`docs/TEST_REPORT.md`. Production ops: `docs/PRODUCTION.md`.
 
 ## Layout
 
-- `jev_developer/policy.py` — typed choice (`choose`, `Decision`, keyword sets)
-- `jev_developer/tools.py` — guarded `read/search/edit/run` + deny/allow lists
-- `jev_developer/agent.py` — `collect_files`, `run_task` loop (never raises)
-- `jev_developer/chat.py` — `ChatSession` REPL + slash commands
+- `jev_developer/policy.py` — typed choice
+- `jev_developer/tools.py` — guarded `read/search/edit/run`
+- `jev_developer/agent.py` — `collect_files`, `run_task` (never raises)
+- `jev_developer/chat.py` — `ChatSession` REPL
 - `jev_developer/tui.py` — curses TUI + REPL fallback
-- `jev_developer/providers.py` — optional OpenAI-compatible `complete()`
-- `jev_developer/cli.py` — `run/ask/benchmark/chat/tui`
-- `tests/test_policy.py`, `test_tools.py`, `test_loop.py` — offline contracts
-- `docs/ARCHITECTURE.md`, `docs/TEST_REPORT.md` — design + verification
+- `jev_developer/providers.py` — LLM `complete()` with retries
+- `jev_developer/config.py` — layered config + validation
+- `jev_developer/logging_util.py` — logger + redaction + JSONL traces
+- `jev_developer/errors.py` — `JevError` codes
+- `jev_developer/cli.py` — 8 commands
+- `tests/` — `test_policy/test_tools/test_loop/test_prod`
+- `docs/` — `ARCHITECTURE/TEST_REPORT/PRODUCTION`

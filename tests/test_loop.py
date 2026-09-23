@@ -58,5 +58,5 @@ def test_tui_and_cli():
 
     r = CliRunner().invoke(app, ["--help"])
     assert r.exit_code == 0
-    for cmd in ("run", "ask", "benchmark", "chat", "tui"):
+    for cmd in ("run", "ask", "benchmark", "chat", "tui", "init", "doctor", "version"):
         assert cmd in r.output
