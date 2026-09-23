@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from jev_developer.agent import run_task
+from jev_developer.chat import ChatSession
 from jev_developer.policy import choose
 from jev_developer.tools import edit, read, run, search
 
@@ -42,3 +43,26 @@ def test_run_task_done(tmp_path: Path):
     (tmp_path / "main.py").write_text("print(1)")
     res = run_task(tmp_path, "read the main file", max_steps=4)
     assert res["status"] in ("done", "budget", "needs-human-edit")
+
+
+def test_chat_commands(tmp_path: Path):
+    (tmp_path / "main.py").write_text("print(1)")
+    s = ChatSession(tmp_path)
+    assert "/" in s.handle("/help")
+    assert "main.py" in s.handle("/files")
+    assert "print(1)" in s.handle("/read main.py")
+    assert "history cleared" in s.handle("/clear")
+    assert s.handle("/quit") == "quit"
+    out = s.handle("hello world")
+    assert "Plan:" in out
+
+
+def test_chat_blocks_secret(tmp_path: Path):
+    s = ChatSession(tmp_path)
+    assert "error" in s.handle("/read .env")
+
+
+def test_tui_imports():
+    import jev_developer.tui as tui
+
+    assert hasattr(tui, "run_tui")

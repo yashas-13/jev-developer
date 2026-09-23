@@ -1,4 +1,4 @@
-"""CLI entry: jev-dev run / ask / benchmark."""
+"""CLI entry: jev-dev run / ask / benchmark / chat / tui."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -43,6 +43,22 @@ def benchmark():
     except ValueError:
         pass
     print({"benchmark": "pass", "checks": 3})
+
+
+@app.command()
+def chat(path: str = "."):
+    """Interactive chat REPL with slash commands (/run /read /search /files /test /quit)."""
+    from .chat import ChatSession
+
+    ChatSession(Path(path).resolve()).repl()
+
+
+@app.command()
+def tui(path: str = "."):
+    """Full-screen TUI: files sidebar + chat/log + status bar (Tab to switch, Enter to send)."""
+    from .tui import run_tui
+
+    run_tui(Path(path).resolve())
 
 
 def app_entry():

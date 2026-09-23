@@ -39,6 +39,15 @@ LLM mode (optional): set `JEV_API_KEY` + `JEV_BASE_URL` (OpenRouter-compatible) 
 - Edits require exact-once `old_text` match.
 - Every run returns a step log; `DONE` is not proof — re-run tests.
 
+## Interactive chat + TUI
+
+```bash
+jev-dev chat --path ./myrepo     # REPL: /run /read /search /files /test /clear /help /quit
+jev-dev tui --path ./myrepo      # full-screen: files sidebar + log, Tab switches pane, Enter sends
+```
+
+TUI uses stdlib `curses` only (Termux-safe, no extra deps); falls back to chat REPL if unavailable.
+
 ## Layout
 
 - `jev_developer/policy.py` — typed choice
